@@ -242,7 +242,7 @@ def gatherBacDive():
 
             except Exception as e:
                 stack = traceback.format_exc()
-                print("Sadness: " + str(e) + " (" + str(stack) + ")", file=sys.stderr)
+                print("Sadness: " + str(e) + " (" + str(stack) + ")")
 
         print("Ended BacDive search.")
 
