@@ -19,10 +19,17 @@ def searchSpecies(record, soup):
 
     # Default, to be overwritten
     record.species = "NULL"
+    record.designation = "NULL"
+    record.collectionNums = []
 
     for infoSection in infoboxbar:
         if "Species: " in infoSection.text:
             record.species = infoSection.text.split(" ")[1] + " " + infoSection.text.split(" ")[2]
+        if "Strain Designation: " in infoSection.text:
+            record.designation = infoSection.text
+        if "Culture col. no.: " in infoSection.text:
+            for colNo in infoSection.text.split(", "):
+                record.collectionNums.append(colNo)
 
 
 def searchTaxonomy(record, soup):
@@ -71,10 +78,18 @@ def searchPathogenicity(record, soup):
     for section in sections:  # Uses tooltip text of section to determine it is that section
         if "Information on possible application of the strain and its possible interaction with e.g. potential hosts" in section.text:
             try:
-                for line in section.find_all(class_="mark-hover"):
-                    if "Pathogenicity" in line.txt and "yes" in line.find(class_="valigntop"):
+                lookingAtPathogenicity = False
+                for line in section.text.split("\n"):
+                    if lookingAtPathogenicity and "yes" in line:
                         record.pathogenicity = "True"
+                        print("Verify Mark!")
                         break  # May find multiple entries; will use the first
+                    if "Pathogenicity" in line:
+                        lookingAtPathogenicity = True
+                        print("Pathogenicity Mark!")
+                    else:
+                        lookingAtPathogenicity = False
+
             except:
                 print("No pathogenicity information found.")
                 pass
@@ -147,6 +162,15 @@ def searchTagsAndSource(record, soup):
                 pass
 
 
+def fixPathogenicityAndLivingState(record):
+    if record.pathogenicity == "False" and "#Infection" in record.tags1:
+        record.pathogenicity = "Infection"
+    if record.pathogenicity == "True" or record.pathogenicity == "Infection" or "#Host" in record.tags1:
+        record.livingState = "Not Free Living"
+    else:
+        record.livingState = "Free Living"
+
+
 def populateOneRecord(index):
     url = "https://bacdive.dsmz.de/strain/" + str(index)
 
@@ -159,13 +183,10 @@ def populateOneRecord(index):
         record.id = str(index)
 
         soup = BeautifulSoup(page.text, 'html.parser')
-        # print(soup.prettify())
 
         goodsoup = soup  # Seeming to miss content?
         # goodsoup = soup.find(id="middle_content", recursive=True)
         # goodsoup = soup.find(id="middle_content")
-
-        # print(goodsoup.prettify(), file=sys.stdout)
 
         searchSpecies(record, goodsoup)
         searchTaxonomy(record, goodsoup)
@@ -174,28 +195,26 @@ def populateOneRecord(index):
         searchAerobicity(record, goodsoup)
         searchGC_Content(record, goodsoup)
         searchTagsAndSource(record, goodsoup)
+        fixPathogenicityAndLivingState(record)
 
-        if record.pathogenicity == "True" or "Host" in record.tags1:
-            record.livingState = "Not Free Living"
-        else:
-            record.livingState = "Free Living"
-
-            print(record.id + "\t" +
-                  record.species + "\t" +
-                  record.taxDomain + "\t" +
-                  record.taxPhylum + "\t" +
-                  record.taxClass + "\t" +
-                  record.taxOrder + "\t" +
-                  record.taxFamily + "\t" +
-                  record.taxGenus + "\t" +
-                  record.livingState + "\t" +
-                  record.pathogenicity + "\t" +
-                  record.aerobicity + "\t" +
-                  record.gc_content + "\t" +
-                  ", ".join([str(tag) for tag in record.tags1]) + "\t" +
-                  ", ".join([str(tag) for tag in record.tags2]) + "\t" +
-                  record.source + "\t" +
-                  record.url + "\n")
+        print(record.id + "\t" +
+              record.species + "\t" +
+              record.designation + "\t" +
+              ", ".join([str(tag) for tag in record.collectionNums]) + "\t" +
+              record.taxDomain + "\t" +
+              record.taxPhylum + "\t" +
+              record.taxClass + "\t" +
+              record.taxOrder + "\t" +
+              record.taxFamily + "\t" +
+              record.taxGenus + "\t" +
+              record.livingState + "\t" +
+              record.pathogenicity + "\t" +
+              record.aerobicity + "\t" +
+              record.gc_content + "\t" +
+              ", ".join([str(tag) for tag in record.tags1]) + "\t" +
+              ", ".join([str(tag) for tag in record.tags2]) + "\t" +
+              record.source + "\t" +
+              record.url + "\n")
 
     else:
         print("Status from page " + url + ": " + str(page.status_code))
@@ -207,9 +226,8 @@ def populateOneRecord(index):
 def gatherBacDive():
     print("Gathering BacDive data! (This will take a few minutes.)")
 
-
     indices = []
-    with open("indexList.txt","r") as indexFile:
+    with open("indexList.txt", "r") as indexFile:
         for line in indexFile.readlines():
             indices.append(line.strip())
 
@@ -217,14 +235,21 @@ def gatherBacDive():
     with open('bacDiveScrapeResults.txt', 'a+') as outFile:
         for bacDiveIndex in indices:
             try:
-                if i > 100:
+                if i > 0:  # Remove when done testing
                     break
                 i += 1
-                record = populateOneRecord(bacDiveIndex)
-                time.sleep(3)
+                pathogenIndex = 17252
+                infectionIndex = 132746
+                nonPathogenNonFreeLiving = 138775
+
+                # record = populateOneRecord(bacDiveIndex)
+                record = populateOneRecord(nonPathogenNonFreeLiving)
+                time.sleep(1.5)
 
                 outFile.write(record.id + "\t" +
                               record.species + "\t" +
+                              record.designation + "\t" +
+                              ", ".join([str(coNo) for coNo in record.collectionNums]) + "\t" +
                               record.taxDomain + "\t" +
                               record.taxPhylum + "\t" +
                               record.taxClass + "\t" +
@@ -242,10 +267,9 @@ def gatherBacDive():
 
             except Exception as e:
                 stack = traceback.format_exc()
-                print("Sadness: " + str(e) + " (" + str(stack) + ")")
+                print("Sadness: " + str(e) + " (" + str(stack) + ")", file=sys.stderr)
 
         print("Ended BacDive search.")
-
 
 
 gatherBacDive()
