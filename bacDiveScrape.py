@@ -153,7 +153,7 @@ def searchTagsAndSource(record, soup):
                                 if colNum == 1:
                                     record.tags1.append(col.text)
                                 elif colNum == 2:
-                                    record.tags2.append(col.text)
+                                    record.tags2.append(col.text.encode('ascii', 'ignore').decode('ascii'))
                                 else:
                                     break
                                 colNum += 1
@@ -267,7 +267,7 @@ def gatherBacDive():
 
             except Exception as e:
                 stack = traceback.format_exc()
-                print("Sadness: " + str(e) + " (" + str(stack) + ")", file=sys.stderr)
+                print("Sadness: " + str(e) + " (" + str(stack) + ")")
 
         print("Ended BacDive search.")
 
